@@ -10,7 +10,8 @@
         "lint": "biome check ./src ./scripts",
         "lint:fix": "biome check --write ./src ./scripts",
         "setup:hooks": "sh scripts/setup-git-hooks.sh",
-        "postinstall": "sh scripts/setup-git-hooks.sh"
+        "setup:mcp": "node --import=tsx ./scripts/generate-mcp-config.ts",
+        "postinstall": "npm run setup:hooks && npm run setup:mcp"
     },
     "dependencies": {
         "@stackone/cli": "1.8.1",
