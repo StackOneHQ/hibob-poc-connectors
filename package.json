@@ -13,7 +13,7 @@
         "postinstall": "npm run setup:hooks"
     },
     "dependencies": {
-        "@stackone/cli": "^1.9.2",
+        "@stackone/cli": "1.9.3",
         "@stackone/connect-sdk": "2.0.0",
         "@stackone/core": "2.0.0",
         "@stackone/expressions": "0.17.0",

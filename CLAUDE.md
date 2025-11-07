@@ -610,3 +610,25 @@ A successful Falcon configuration delivers:
 - **Documented**: Clear sources and context for all implementations
 
 Remember: **Autonomous Discovery + Version Validation + Maximum coverage + Real testing + Security = Customer value**
+
+---
+
+# 🔄 Converting TypeScript Connectors to YAML
+
+For detailed instructions on converting existing TypeScript-based connectors from the `unified-cloud-api` repository to YAML-based Falcon configurations, see **[YAMLCONVERSION.md](src/configs/YAMLCONVERSION.md)**.
+
+This guide covers:
+
+- Authentication conversion patterns (OAuth2, API Key, Basic, Custom)
+- Resource action conversion (list, get, create, update, delete)
+- Field type mappings and enum handling
+- Expression syntax (JSONPath, JEXL, String Interpolation)
+- PreResolvers to sequential steps conversion
+- Data mapping pipeline (request → map_fields → typecast)
+- Common pitfalls and validation errors
+- Complete examples and best practices
+
+---
+
+*Authenticated with StackOne • Falcon MCP Server*
+*For full workflow details, see the complete CLAUDE.md in repository*
