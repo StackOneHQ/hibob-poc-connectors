@@ -1,6 +1,6 @@
+import { loadConnector, parseYamlConnector } from '@stackone/connect-sdk';
 import fs from 'fs';
 import path from 'path';
-import { loadConnector, parseYamlConnector } from '@stackone/connect-sdk';
 
 const errors: { file: string; error: unknown }[] = [];
 
