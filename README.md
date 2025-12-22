@@ -11,13 +11,27 @@ This repository contains a collection of connectors for and created by StackOne.
 - Node.js (v18 or higher recommended)
 - npm
 
+### Fork This Repository
+
+**Important:** Before you begin, you should fork this repository to your own GitHub account or organization. This allows you to:
+
+- Maintain your own connector configurations
+- Submit pull requests back to the main repository
+- Keep your custom connectors separate from the template
+
+To fork this repository:
+
+1. Click the "Fork" button at the top right of the GitHub page
+2. Select your account or organization
+3. Clone your forked repository (not this one)
+
 ### Installation
 
-1. Clone the repository:
+1. Clone your forked repository:
 
    ```bash
-   git clone <repository-url>
-   cd visier-connectors
+   git clone <your-forked-repository-url>
+   cd <repository-name>
    ```
 
 2. Install dependencies:
@@ -74,9 +88,12 @@ For comprehensive guides on building and converting connectors, see:
 
 ## How to Contribute
 
-1. Fork this repository.
+1. **Fork this repository** (see "Fork This Repository" section above).
 2. Clone your fork to your local machine.
 3. Create a new branch for your changes.
+4. Make your changes and commit them following our commit conventions.
+5. Push your changes to your fork.
+6. Open a pull request from your fork to this repository.
 
 ### Development Husbandry
 
