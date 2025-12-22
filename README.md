@@ -1,8 +1,8 @@
-# Visier Connectors
+# Connector Template
 
 ## Description
 
-This repository contains a collection of connectors for and created by, Visier.
+This repository contains a collection of connectors for and created by StackOne.
 
 ## Getting Started
 
