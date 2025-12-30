@@ -47,6 +47,8 @@ To fork this repository:
 
 3. Set up authentication:
 
+   **BEFORE RUNNING THIS ASK YOUR CONTACT AT STACK-ONE FOR USERNAME/PASSWORD**
+
    ```bash
    npx @stackone/cli agent setup --local
    ```
