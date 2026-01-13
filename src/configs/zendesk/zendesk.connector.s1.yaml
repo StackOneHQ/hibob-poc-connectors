@@ -1,0 +1,2488 @@
+StackOne: 1.0.0
+info:
+  title: Zendesk
+  key: zendesk
+  version: 1.0.0
+  description: Zendesk is a customer service and engagement platform designed to help businesses manage and improve their customer support.
+  assets:
+    icon: https://stackone-logos.com/api/zendesk-sell/filled/png
+baseUrl: https://${credentials.subdomain}.zendesk.com/api/v2
+authentication:
+  - custom:
+      type: custom
+      label: API Token
+      support:
+        link: https://hub.stackone.com/connection-guides/ticketing/zendesk
+        description: The steps in this guide require Admin privileges within Zendesk.
+      authorization:
+        type: basic
+        username: ${credentials.emailId}/token
+        password: ${credentials.apiToken}
+        encoding: base64
+      configFields:
+        - key: subdomain
+          label: Subdomain
+          type: text
+          required: true
+          secret: false
+          placeholder: stackone
+          description: The Zendesk subdomain for your account (e.g., for `https://stackone.zendesk.com`, use `stackone`).
+        - key: emailId
+          label: Email
+          type: text
+          required: true
+          secret: false
+          placeholder: example@email.com
+          description: The email address of the Zendesk user associated with the API token. This user must have appropriate permissions (e.g., admin or agent) to access the required Zendesk API resources.
+        - key: apiToken
+          label: API Token
+          type: password
+          required: true
+          secret: true
+          description: A Zendesk API token used for authentication. You can generate one in the Zendesk Admin Center under **Apps and integrations > APIs > Zendesk API**.
+      environments:
+        - key: production
+          name: Production
+  - oauth2:
+      type: oauth2
+      label: OAuth 2.0
+      support:
+        description: The steps in this guide require Admin privileges in your Zendesk account.
+      authorization:
+        type: oauth2
+        authorizationUrl: https://${credentials.subdomain}.zendesk.com/oauth/authorizations/new
+        authorizationParams:
+          response_type: 'code'
+          client_id: $.credentials.clientId
+          redirect_uri: '${apiHostUri}/connect/oauth2/zendesk/callback'
+          scope: $.credentials.scopes
+        tokenUrl: 'https://${credentials.subdomain}.zendesk.com/oauth/tokens'
+        token: $.credentials.accessToken
+        includeBearer: true
+      setupFields:
+        - key: subdomain
+          label: Subdomain
+          type: text
+          required: true
+          secret: false
+          placeholder: stackone
+          description: The Zendesk subdomain for your account (e.g., for `https://stackone.zendesk.com`, use `stackone`).
+        - key: clientId
+          label: Client ID
+          type: text
+          required: true
+          secret: false
+          placeholder: 4A98C887DABEBDF0BD8EF7D
+          description: Can be found by creating a global OAuth client. See [Zendesk Global OAuth Clients](https://developer.zendesk.com/api-reference/ticketing/oauth/global_clients/) documentation for setup instructions.
+          tooltip: The Client ID from your Zendesk OAuth app registration.
+        - key: clientSecret
+          label: Client Secret
+          type: password
+          required: true
+          secret: true
+          placeholder: PcUXs2dse1e46_Lfyu-OKHKjDsRaHyEhBGEGXgs_
+          description: The Client Secret generated when creating your global OAuth client. See [Zendesk Global OAuth Clients](https://developer.zendesk.com/api-reference/ticketing/oauth/global_clients/) documentation for setup instructions.
+          tooltip: The Client Secret from your Zendesk OAuth app registration.
+        - key: scopes
+          label: Scopes
+          type: text
+          required: true
+          secret: false
+          placeholder: read write
+          description: Enter a list of valid Zendesk OAuth scopes separated by a space. See [Zendesk OAuth tokens documentation](https://developer.zendesk.com/api-reference/ticketing/oauth/oauth_tokens/) for more information. If no scopes are provided, the default scopes will be used.
+      refreshAuthentication:
+        action:
+          actionId: refresh_token_zendesk
+          categories:
+            - internal
+          actionType: refresh_token
+          label: Refresh Zendesk OAuth2 Token
+          description: Refresh Zendesk OAuth2 token
+          steps:
+            - stepId: refresh_token_request
+              description: Get new access token
+              stepFunction:
+                functionName: request
+                parameters:
+                  baseUrl: 'https://${credentials.subdomain}.zendesk.com'
+                  url: '/oauth/tokens'
+                  method: post
+                  authorization:
+                    type: basic
+                    username: $.credentials.clientId
+                    password: $.credentials.clientSecret
+                    encoding: base64
+                  args:
+                    - name: Content-Type
+                      value: application/x-www-form-urlencoded
+                      in: headers
+                    - name: grant_type
+                      value: refresh_token
+                      in: body
+                    - name: refresh_token
+                      value: $.credentials.refreshToken
+                      in: body
+                    - name: client_id
+                      value: $.credentials.clientId
+                      in: body
+                    - name: client_secret
+                      value: $.credentials.clientSecret
+                      in: body
+                    - name: redirect_uri
+                      value: ${apiHostUri}/connect/oauth2/zendesk/callback
+                      in: body
+            - stepId: map_tokens
+              description: Map tokens data
+              stepFunction:
+                functionName: map_fields
+                version: '2'
+                parameters:
+                  fields:
+                    - targetFieldKey: accessToken
+                      expression: $.access_token
+                      type: string
+                    - targetFieldKey: refreshToken
+                      expression: $.refresh_token
+                      type: string
+                    - targetFieldKey: expiresIn
+                      expression: $.expires_in
+                      type: number
+                  dataSource: $.steps.refresh_token_request.output.data
+          result:
+            data: $.steps.map_tokens.output.data
+      testActions:
+        - action: get_current_users
+          required: true
+      environments:
+        - key: production
+          name: Production
+actions:
+  - actionId: list_brands
+    categories:
+      - ticketing
+    actionType: list
+    label: List Brands
+    description: Retrieve all brands for the account sorted by name, representing customer-facing identities
+    details: "Returns a paginated list of all brands in Zendesk. Supports pagination. Returns brand data including ID, name, brand_url, active status, is_default flag, has_help_center flag, help_center_state, created/updated timestamps, and other brand properties."
+    entrypointUrl: /brands
+    entrypointHttpMethod: get
+    steps:
+      - stepId: get_brands
+        description: Fetch brands from Zendesk API with pagination support
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /brands.json
+            method: get
+            args:
+              - name: page[size]
+                value: $.inputs.page_size
+                in: query
+                condition: '{{$.inputs.page_size > 0}}'
+              - name: page[after]
+                value: $.inputs.next
+                in: query
+                condition: '{{$.inputs.next}}'
+    result:
+      data: $.steps.get_brands.output.data
+  - actionId: get_brand
+    categories:
+      - ticketing
+    actionType: get
+    label: Get Brand
+    description: Retrieve detailed information about a specific brand by its ID
+    details: "Returns detailed information for a specific brand by its ID. Includes brand ID, name, brand_url, active status, is_default flag, has_help_center flag, help_center_state, created/updated timestamps, and all other brand properties."
+    entrypointUrl: /brands/:id
+    entrypointHttpMethod: get
+    inputs:
+      - name: id
+        description: The unique identifier of the brand
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: get_brand_by_id
+        description: Fetch brand details from Zendesk API
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /brands/${inputs.id}.json
+            method: get
+    result:
+      data: $.steps.get_brand_by_id.output.data
+  - actionId: create_brand
+    categories:
+      - ticketing
+    actionType: create
+    label: Create Brand
+    description: Create a new brand with specified subdomain and customer-facing identity settings
+    details: "Creates a new brand in Zendesk. Requires name. Supports optional brand_url, active status, is_default flag, has_help_center flag, and help_center_state. Returns the created brand with ID and all properties."
+    entrypointUrl: /brands
+    entrypointHttpMethod: post
+    inputs:
+      - name: brand
+        description: Brand object containing all brand properties
+        type: object
+        in: body
+        required: true
+        properties:
+          - name: name
+            description: The name of the brand
+            type: string
+            required: true
+          - name: subdomain
+            description: The subdomain for the brand (must be unique)
+            type: string
+            required: true
+          - name: brand_url
+            description: The URL of the brand
+            type: string
+            required: false
+          - name: host_mapping
+            description: The host mapping to this brand (only admins can set this)
+            type: string
+            required: false
+          - name: signature_template
+            description: The signature template for the brand
+            type: string
+            required: false
+          - name: active
+            description: Whether the brand is active
+            type: boolean
+            required: false
+          - name: has_help_center
+            description: Whether the brand has a Help Center
+            type: boolean
+            required: false
+    steps:
+      - stepId: create_brand
+        description: Create a new brand in Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /brands.json
+            method: post
+            args:
+              - name: brand
+                value: $.inputs.brand
+                in: body
+    result:
+      data: $.steps.create_brand.output.data
+  - actionId: update_brand
+    categories:
+      - ticketing
+    actionType: update
+    label: Update Brand
+    description: Update an existing brand's settings, identity, or configuration
+    details: "Updates an existing brand. Requires brand ID. Supports updating name, brand_url, active status, is_default flag, has_help_center flag, and help_center_state. Returns the updated brand with all properties."
+    entrypointUrl: /brands/:id
+    entrypointHttpMethod: put
+    inputs:
+      - name: id
+        description: The unique identifier of the brand to update
+        type: string
+        in: path
+        required: true
+      - name: brand
+        description: Brand object containing properties to update
+        type: object
+        in: body
+        required: true
+        properties:
+          - name: name
+            description: The name of the brand
+            type: string
+            required: false
+          - name: subdomain
+            description: The subdomain for the brand
+            type: string
+            required: false
+          - name: brand_url
+            description: The URL of the brand
+            type: string
+            required: false
+          - name: host_mapping
+            description: The host mapping to this brand (only admins can set this)
+            type: string
+            required: false
+          - name: signature_template
+            description: The signature template for the brand
+            type: string
+            required: false
+          - name: active
+            description: Whether the brand is active
+            type: boolean
+            required: false
+          - name: has_help_center
+            description: Whether the brand has a Help Center
+            type: boolean
+            required: false
+    steps:
+      - stepId: update_brand
+        description: Update brand details in Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /brands/${inputs.id}.json
+            method: put
+            args:
+              - name: brand
+                value: $.inputs.brand
+                in: body
+    result:
+      data: $.steps.update_brand.output.data
+  - actionId: delete_brand
+    categories:
+      - ticketing
+    actionType: delete
+    label: Delete Brand
+    description: Permanently delete a brand from Zendesk
+    details: "Deletes a brand from Zendesk by its ID. This action permanently removes the brand. Returns a success indicator."
+    entrypointUrl: /brands/:id
+    entrypointHttpMethod: delete
+    inputs:
+      - name: id
+        description: The unique identifier of the brand to delete
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: delete_brand
+        description: Remove brand from Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /brands/${inputs.id}.json
+            method: delete
+    result:
+      data: $.steps.delete_brand.output.data
+  - actionId: list_groups
+    categories:
+      - ticketing
+    actionType: list
+    label: List Groups
+    description: Retrieve a paginated list of all support agent groups in the account
+    details: "Returns a paginated list of all groups in Zendesk. Supports pagination. Returns group data including ID, name, description, is_public flag, default flag, created/updated timestamps, and other group properties."
+    entrypointUrl: /groups
+    entrypointHttpMethod: get
+    inputs:
+      - name: exclude_deleted
+        description: Whether to exclude deleted groups from the results
+        type: boolean
+        in: query
+        required: false
+    steps:
+      - stepId: get_groups
+        description: Fetch groups from Zendesk API with pagination support
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /groups.json
+            method: get
+            args:
+              - name: page[size]
+                value: $.inputs.page_size
+                in: query
+                condition: '{{$.inputs.page_size > 0}}'
+              - name: page[after]
+                value: $.inputs.next
+                in: query
+                condition: '{{$.inputs.next}}'
+              - name: exclude_deleted
+                value: $.inputs.exclude_deleted
+                in: query
+                condition: '{{$.inputs.exclude_deleted != null}}'
+    result:
+      data: $.steps.get_groups.output.data
+  - actionId: get_group
+    categories:
+      - ticketing
+    actionType: get
+    label: Get Group
+    description: Retrieve detailed information about a specific group by its ID
+    details: "Returns detailed information for a specific group by its ID. Includes group ID, name, description, is_public flag, default flag, created/updated timestamps, and all other group properties."
+    entrypointUrl: /groups/:id
+    entrypointHttpMethod: get
+    inputs:
+      - name: id
+        description: The unique identifier of the group
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: get_group_by_id
+        description: Fetch group details from Zendesk API
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /groups/${inputs.id}.json
+            method: get
+    result:
+      data: $.steps.get_group_by_id.output.data
+  - actionId: create_group
+    categories:
+      - ticketing
+    actionType: create
+    label: Create Group
+    description: Create a new support agent group for ticket assignment and workflow management
+    details: "Creates a new group in Zendesk. Requires name. Supports optional description, is_public flag, and default flag. Returns the created group with ID and all properties."
+    entrypointUrl: /groups
+    entrypointHttpMethod: post
+    inputs:
+      - name: group
+        description: Group object containing all group properties
+        type: object
+        in: body
+        required: true
+        properties:
+          - name: name
+            description: The unique name of the group
+            type: string
+            required: true
+          - name: description
+            description: Description of the group's purpose and responsibilities
+            type: string
+            required: false
+          - name: is_public
+            description: Whether the group is public (visible to all agents) or private
+            type: boolean
+            required: false
+    steps:
+      - stepId: create_group
+        description: Create a new group in Zendesk for agent assignment
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /groups.json
+            method: post
+            args:
+              - name: group
+                value: $.inputs.group
+                in: body
+    result:
+      data: $.steps.create_group.output.data
+  - actionId: update_group
+    categories:
+      - ticketing
+    actionType: update
+    label: Update Group
+    description: Update an existing group's name, description, or visibility settings
+    details: "Updates an existing group. Requires group ID. Supports updating name, description, is_public flag, and default flag. Returns the updated group with all properties."
+    entrypointUrl: /groups/:id
+    entrypointHttpMethod: put
+    inputs:
+      - name: id
+        description: The unique identifier of the group to update
+        type: string
+        in: path
+        required: true
+      - name: group
+        description: Group object containing properties to update
+        type: object
+        in: body
+        required: true
+        properties:
+          - name: name
+            description: The unique name of the group
+            type: string
+            required: false
+          - name: description
+            description: Description of the group's purpose and responsibilities
+            type: string
+            required: false
+          - name: is_public
+            description: Whether the group is public (visible to all agents) or private
+            type: boolean
+            required: false
+    steps:
+      - stepId: update_group
+        description: Update group details in Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /groups/${inputs.id}.json
+            method: put
+            args:
+              - name: group
+                value: $.inputs.group
+                in: body
+    result:
+      data: $.steps.update_group.output.data
+  - actionId: delete_group
+    categories:
+      - ticketing
+    actionType: delete
+    label: Delete Group
+    description: Permanently delete a group from Zendesk (marks as deleted, group ID preserved)
+    details: "Deletes a group from Zendesk by its ID. This action permanently removes the group. Returns a success indicator."
+    entrypointUrl: /groups/:id
+    entrypointHttpMethod: delete
+    inputs:
+      - name: id
+        description: The unique identifier of the group to delete
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: delete_group
+        description: Remove group from Zendesk (soft delete)
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /groups/${inputs.id}.json
+            method: delete
+    result:
+      data: $.steps.delete_group.output.data
+  - actionId: list_organizations
+    categories:
+      - ticketing
+    actionType: list
+    label: List Organizations
+    description: Retrieve a paginated list of all organizations in the Zendesk account
+    details: "Returns a paginated list of all organizations in Zendesk. Supports pagination. Returns organization data including ID, name, domain names, tags, created/updated timestamps, and other organization properties."
+    entrypointUrl: /organizations
+    entrypointHttpMethod: get
+    steps:
+      - stepId: get_organizations
+        description: Fetch organizations from Zendesk API with pagination support
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /organizations.json
+            method: get
+            args:
+              - name: page[size]
+                value: $.inputs.page_size
+                in: query
+                condition: '{{$.inputs.page_size > 0}}'
+              - name: page[after]
+                value: $.inputs.next
+                in: query
+                condition: '{{$.inputs.next}}'
+    result:
+      data: $.steps.get_organizations.output.data
+  - actionId: get_organization
+    categories:
+      - ticketing
+    actionType: get
+    label: Get Organization
+    description: Retrieve detailed information about a specific organization by its ID
+    details: "Returns detailed information for a specific organization by its ID. Includes organization ID, name, domain names, tags, created/updated timestamps, and all other organization properties."
+    entrypointUrl: /organizations/:id
+    entrypointHttpMethod: get
+    inputs:
+      - name: id
+        description: The unique identifier of the organization
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: get_organization_by_id
+        description: Fetch organization details from Zendesk API
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /organizations/${inputs.id}.json
+            method: get
+    result:
+      data: $.steps.get_organization_by_id.output.data
+  - actionId: search_organizations
+    categories:
+      - ticketing
+    actionType: list
+    label: Search Organizations
+    description: Search for organizations by external ID or name with exact matching
+    details: "Searches for organizations in Zendesk using a query string. Supports filtering by name, domain, and other organization fields. Returns matching organization data including ID, name, domain names, and other organization properties."
+    entrypointUrl: /organizations/search
+    entrypointHttpMethod: get
+    inputs:
+      - name: external_id
+        description: External ID to search for (case insensitive exact match)
+        type: string
+        in: query
+        required: false
+      - name: name
+        description: Organization name to search for (case insensitive exact match)
+        type: string
+        in: query
+        required: false
+    steps:
+      - stepId: search_organizations
+        description: Search organizations using external ID or name criteria
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /organizations/search.json
+            method: get
+            args:
+              - name: external_id
+                value: $.inputs.external_id
+                in: query
+                condition: '{{present($.inputs.external_id)}}'
+              - name: name
+                value: $.inputs.name
+                in: query
+                condition: '{{present($.inputs.name)}}'
+    result:
+      data: $.steps.search_organizations.output.data
+  - actionId: create_organization
+    categories:
+      - ticketing
+    actionType: create
+    label: Create Organization
+    description: Create a new organization with specified details
+    details: "Creates a new organization in Zendesk. Requires name. Supports optional domain_names (array), tags (array), and other organization properties. Returns the created organization with ID and all properties."
+    entrypointUrl: /organizations
+    entrypointHttpMethod: post
+    inputs:
+      - name: organization
+        description: Organization object containing all organization properties
+        type: object
+        in: body
+        required: true
+        properties:
+          - name: name
+            description: The name of the organization
+            type: string
+            required: true
+          - name: external_id
+            description: A unique external ID for the organization
+            type: string
+            required: false
+          - name: domain_names
+            description: Array of domain names associated with the organization
+            type: object
+            required: false
+          - name: details
+            description: Additional details about the organization
+            type: string
+            required: false
+          - name: notes
+            description: Notes about the organization
+            type: string
+            required: false
+          - name: group_id
+            description: The ID of the group to associate with the organization
+            type: number
+            required: false
+          - name: shared_tickets
+            description: Whether end users can see each other's tickets
+            type: boolean
+            required: false
+          - name: shared_comments
+            description: Whether end users can comment on each other's tickets
+            type: boolean
+            required: false
+          - name: tags
+            description: Array of tags for the organization
+            type: object
+            required: false
+    steps:
+      - stepId: create_organization
+        description: Create a new organization in Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /organizations.json
+            method: post
+            args:
+              - name: organization
+                value: $.inputs.organization
+                in: body
+    result:
+      data: $.steps.create_organization.output.data
+  - actionId: update_organization
+    categories:
+      - ticketing
+    actionType: update
+    label: Update Organization
+    description: Update an existing organization's information
+    details: "Updates an existing organization. Requires organization ID. Supports updating name, domain_names, tags, and other organization properties. Returns the updated organization with all properties."
+    entrypointUrl: /organizations/:id
+    entrypointHttpMethod: put
+    inputs:
+      - name: id
+        description: The unique identifier of the organization to update
+        type: string
+        in: path
+        required: true
+      - name: organization
+        description: Organization object containing properties to update
+        type: object
+        in: body
+        required: true
+        properties:
+          - name: name
+            description: The name of the organization
+            type: string
+            required: false
+          - name: external_id
+            description: A unique external ID for the organization
+            type: string
+            required: false
+          - name: domain_names
+            description: Array of domain names (replaces all existing domains)
+            type: object
+            required: false
+          - name: details
+            description: Additional details about the organization
+            type: string
+            required: false
+          - name: notes
+            description: Notes about the organization
+            type: string
+            required: false
+          - name: group_id
+            description: The ID of the group to associate with the organization
+            type: number
+            required: false
+          - name: shared_tickets
+            description: Whether end users can see each other's tickets
+            type: boolean
+            required: false
+          - name: shared_comments
+            description: Whether end users can comment on each other's tickets
+            type: boolean
+            required: false
+          - name: tags
+            description: Array of tags for the organization
+            type: object
+            required: false
+    steps:
+      - stepId: update_organization
+        description: Update organization details in Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /organizations/${inputs.id}.json
+            method: put
+            args:
+              - name: organization
+                value: $.inputs.organization
+                in: body
+    result:
+      data: $.steps.update_organization.output.data
+  - actionId: delete_organization
+    categories:
+      - ticketing
+    actionType: delete
+    label: Delete Organization
+    description: Permanently delete an organization from Zendesk
+    details: "Deletes a delete organization. Permanently delete an organization from zendesk"
+    entrypointUrl: /organizations/:id
+    entrypointHttpMethod: delete
+    inputs:
+      - name: id
+        description: The unique identifier of the organization to delete
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: delete_organization
+        description: Remove organization from Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /organizations/${inputs.id}.json
+            method: delete
+    result:
+      data: $.steps.delete_organization.output.data
+  - actionId: search
+    categories:
+      - ticketing
+    actionType: get
+    label: Search
+    description: Search over ticket, user, organization, and groups using search query syntax with filtering, sorting, and pagination
+    details: "Searches Zendesk for tickets, users, or organizations using a query string. Supports filtering by type (ticket, user, organization) and pagination. Returns search results including matching tickets, users, or organizations with their properties."
+    entrypointUrl: /search
+    entrypointHttpMethod: get
+    resources: "Zendesk Search API - Search for tickets: https://developer.zendesk.com/api-reference/ticketing/ticket-management/search/"
+    inputs:
+      - name: query
+        description: Search query string (e.g., "type:ticket status:open", "type:ticket priority:urgent assignee:john@example.com"). See Zendesk search reference for full query syntax
+        type: string
+        in: query
+        required: true
+      - name: sort_by
+        description: Sort field (updated_at, created_at, priority, status, ticket_type). Defaults to relevance
+        type: string
+        in: query
+        required: false
+      - name: sort_order
+        description: Sort order (asc or desc). Defaults to desc
+        type: string
+        in: query
+        required: false
+    steps:
+      - stepId: search
+        description: Execute search query against Zendesk API with pagination support
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /search.json
+            method: get
+            args:
+              - name: query
+                value: $.inputs.query
+                in: query
+              - name: sort_by
+                value: $.inputs.sort_by
+                in: query
+                condition: "{{present($.inputs.sort_by)}}"
+              - name: sort_order
+                value: $.inputs.sort_order
+                in: query
+                condition: "{{present($.inputs.sort_order)}}"
+    result:
+      data: $.steps.search.output.data
+  - actionId: list_tags
+    categories:
+      - ticketing
+    actionType: list
+    label: List Tags
+    description: Retrieve the most popular tags used in the last 60 days, sorted by decreasing popularity
+    details: "Returns a paginated list of all tags in Zendesk. Supports pagination. Returns tag data including tag name and count (number of tickets using the tag)."
+    entrypointUrl: /tags
+    entrypointHttpMethod: get
+    steps:
+      - stepId: get_tags
+        description: Fetch popular tags from Zendesk API with pagination support
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tags.json
+            method: get
+            args:
+              - name: page[size]
+                value: $.inputs.page_size
+                in: query
+                condition: '{{$.inputs.page_size > 0}}'
+              - name: page[after]
+                value: $.inputs.next
+                in: query
+                condition: '{{$.inputs.next}}'
+    result:
+      data: $.steps.get_tags.output.data
+  - actionId: search_tags
+    categories:
+      - ticketing
+    actionType: list
+    label: Search Tags
+    description: Autocomplete search for registered and recent tags by name prefix (minimum 2 characters)
+    details: "Searches for tags in Zendesk using a query string. Returns matching tag data including tag name and count."
+    entrypointUrl: /autocomplete/tags
+    entrypointHttpMethod: get
+    inputs:
+      - name: name
+        description: Tag name substring to search for (minimum 2 characters)
+        type: string
+        in: query
+        required: true
+    steps:
+      - stepId: search_tags
+        description: Search for tags matching the name prefix
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /autocomplete/tags.json
+            method: get
+            args:
+              - name: name
+                value: $.inputs.name
+                in: query
+    result:
+      data: $.steps.search_tags.output.data
+  - actionId: count_tags
+    categories:
+      - ticketing
+    actionType: get
+    label: Count Tags
+    description: Get an approximate count of all tags in the system (refreshed every 24 hours if over 100,000)
+    details: "Returns the total count of tags in Zendesk. Returns a count number."
+    entrypointUrl: /tags/count
+    entrypointHttpMethod: get
+    steps:
+      - stepId: count_tags
+        description: Retrieve total tag count from Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tags/count.json
+            method: get
+    result:
+      data: $.steps.count_tags.output.data
+  - actionId: list_ticket_tags
+    categories:
+      - ticketing
+    actionType: list
+    label: List Ticket Tags
+    description: Retrieve all tags currently applied to a specific ticket
+    details: "Returns a list of all tags associated with a specific ticket by ticket ID. Returns tag data including tag names."
+    entrypointUrl: /tickets/:ticket_id/tags
+    entrypointHttpMethod: get
+    inputs:
+      - name: ticket_id
+        description: The unique identifier of the ticket
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: get_ticket_tags
+        description: Fetch tags associated with the specified ticket
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tickets/${inputs.ticket_id}/tags.json
+            method: get
+    result:
+      data: $.steps.get_ticket_tags.output.data
+  - actionId: add_ticket_tags
+    categories:
+      - ticketing
+    actionType: update
+    label: Add Tags to Ticket
+    description: Add one or more tags to a ticket without removing existing tags (safe update supported)
+    details: "Updates an existing add tags to ticket. Add one or more tags to a ticket without removing existing tags (safe update supported)"
+    entrypointUrl: /tickets/:ticket_id/tags
+    entrypointHttpMethod: put
+    inputs:
+      - name: ticket_id
+        description: The unique identifier of the ticket
+        type: string
+        in: path
+        required: true
+      - name: tags
+        description: Array of tag names to add to the ticket
+        type: string
+        array: true
+        in: body
+        required: true
+      - name: updated_stamp
+        description: Ticket's latest updated_at timestamp for safe update (prevents collisions)
+        type: string
+        in: body
+        required: false
+      - name: safe_update
+        description: Enable safe update to prevent concurrent modification conflicts
+        type: boolean
+        in: body
+        required: false
+    steps:
+      - stepId: add_tags_to_ticket
+        description: Add tags to the ticket in Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tickets/${inputs.ticket_id}/tags.json
+            method: put
+            args:
+              - name: tags
+                value: $.inputs.tags
+                in: body
+              - name: updated_stamp
+                value: $.inputs.updated_stamp
+                in: body
+                condition: '{{$.inputs.updated_stamp}}'
+              - name: safe_update
+                value: $.inputs.safe_update
+                in: body
+                condition: '{{$.inputs.safe_update != null}}'
+    result:
+      data: $.steps.add_tags_to_ticket.output.data
+  - actionId: set_ticket_tags
+    categories:
+      - ticketing
+    actionType: update
+    label: Set Ticket Tags
+    description: Replace all existing tags on a ticket with a new set of tags
+    details: "Updates an existing set ticket tags. Replace all existing tags on a ticket with a new set of tags"
+    entrypointUrl: /tickets/:ticket_id/tags
+    entrypointHttpMethod: post
+    inputs:
+      - name: ticket_id
+        description: The unique identifier of the ticket
+        type: string
+        in: path
+        required: true
+      - name: tags
+        description: Array of tag names to set on the ticket (replaces all existing tags)
+        type: string
+        array: true
+        in: body
+        required: true
+    steps:
+      - stepId: set_ticket_tags
+        description: Replace all tags on the ticket with the provided set
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tickets/${inputs.ticket_id}/tags.json
+            method: post
+            args:
+              - name: tags
+                value: $.inputs.tags
+                in: body
+    result:
+      data: $.steps.set_ticket_tags.output.data
+  - actionId: remove_ticket_tags
+    categories:
+      - ticketing
+    actionType: delete
+    label: Remove Tags from Ticket
+    description: Remove specific tags from a ticket while preserving other tags (safe update supported)
+    details: "Deletes a remove tags from ticket. Remove specific tags from a ticket while preserving other tags (safe update supported)"
+    entrypointUrl: /tickets/:ticket_id/tags
+    entrypointHttpMethod: delete
+    inputs:
+      - name: ticket_id
+        description: The unique identifier of the ticket
+        type: string
+        in: path
+        required: true
+      - name: tags
+        description: Array of tag names to remove from the ticket
+        type: string
+        array: true
+        in: body
+        required: true
+      - name: updated_stamp
+        description: Ticket's latest updated_at timestamp for safe update (prevents collisions)
+        type: string
+        in: body
+        required: false
+      - name: safe_update
+        description: Enable safe update to prevent concurrent modification conflicts
+        type: boolean
+        in: body
+        required: false
+    steps:
+      - stepId: remove_tags_from_ticket
+        description: Remove specified tags from the ticket in Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tickets/${inputs.ticket_id}/tags.json
+            method: delete
+            args:
+              - name: tags
+                value: $.inputs.tags
+                in: body
+              - name: updated_stamp
+                value: $.inputs.updated_stamp
+                in: body
+                condition: '{{$.inputs.updated_stamp}}'
+              - name: safe_update
+                value: $.inputs.safe_update
+                in: body
+                condition: '{{$.inputs.safe_update != null}}'
+    result:
+      data: $.steps.remove_tags_from_ticket.output.data
+  - actionId: list_tickets_attachments
+    categories:
+      - ticketing
+    actionType: list
+    entrypointUrl: /tickets/:id/attachments
+    entrypointHttpMethod: get
+    schema: attachments
+    label: List Ticket Attachments
+    description: List attachments for a Zendesk ticket
+    details: "Returns a paginated list of list ticket attachments. List attachments for a zendesk ticket"
+    inputs:
+      - name: id
+        description: Ticket ID to fetch attachments for
+        type: string
+        in: path
+        required: true
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: ticket_id
+        expression: $.external.ticketId
+        type: string
+      # - targetFieldKey: user_id  # need to be able to filter external data based on main/dataSource input (https://stackonehq.atlassian.net/browse/ENG-10717).
+      #   expression: $.external.author_id
+      #   type: string
+      - targetFieldKey: file_name
+        expression: $.file_name
+        type: string
+      - targetFieldKey: file_format
+        expression: $.content_type
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: '{{$.content_type == "image/jpeg"}}'
+              value: jpeg
+            - matchExpression: '{{$.content_type == "image/jpg"}}'
+              value: jpg
+            - matchExpression: '{{$.content_type == "image/png"}}'
+              value: png
+            - matchExpression: '{{$.content_type == "application/pdf"}}'
+              value: pdf
+            - matchExpression: '{{$.content_type == "text/plain"}}'
+              value: text
+      - targetFieldKey: file_url
+        expression: $.content_url
+        type: string
+      - targetFieldKey: size
+        expression: $.size
+        type: number
+      # - targetFieldKey: created_at # need to be able to filter external data based on main/dataSource input (https://stackonehq.atlassian.net/browse/ENG-10717).
+      #   expression: $.created_at
+      #   type: datetime_string
+    steps:
+      - stepId: get_comments_by_ticket_id
+        description: Get comments data by ticket ID from Zendesk API.
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tickets/${inputs.id}/comments.json
+            method: get
+            response:
+              collection: true
+              indexField: id
+              dataKey: comments
+      - stepId: flatten_attachments_and_map
+        description: Flatten all attachments from all comments
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: $.steps.get_comments_by_ticket_id.output.data[*].attachments[*]
+            externalSources:
+              ticketId: $.inputs.id
+      - stepId: typecast_attachments_data
+        description: Typecast attachments data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.flatten_attachments_and_map.output.data
+    result:
+      data: $.steps.typecast_attachments_data.output.data
+  - actionId: get_tickets_attachment
+    categories:
+      - ticketing
+    actionType: get
+    schema: attachments
+    label: Get Ticket Attachment
+    description: Get attachment by ID for a Zendesk ticket
+    details: "Returns detailed information for a specific get ticket attachment. Get attachment by id for a zendesk ticket"
+    entrypointUrl: /tickets/:id/attachments/:subResourceId
+    entrypointHttpMethod: get
+    inputs:
+      - name: id
+        description: Ticket ID to fetch the attachment from
+        type: string
+        in: path
+        required: true
+      - name: subResourceId
+        description: Attachment ID to fetch
+        type: string
+        in: path
+        required: true
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: ticket_id
+        expression: $.external.ticketId
+        type: string
+      # - targetFieldKey: user_id
+      #   expression: $.author_id
+      #   type: string
+      - targetFieldKey: file_name
+        expression: $.file_name
+        type: string
+      - targetFieldKey: file_format
+        expression: $.content_type
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: '{{$.content_type == "image/jpeg"}}'
+              value: jpeg
+            - matchExpression: '{{$.content_type == "image/jpg"}}'
+              value: jpg
+            - matchExpression: '{{$.content_type == "image/png"}}'
+              value: png
+            - matchExpression: '{{$.content_type == "application/pdf"}}'
+              value: pdf
+            - matchExpression: '{{$.content_type == "text/plain"}}'
+              value: text
+      - targetFieldKey: file_url
+        expression: $.content_url
+        type: string
+      - targetFieldKey: size
+        expression: $.size
+        type: number
+      # - targetFieldKey: created_at
+      #   expression: $.created_at
+      #   type: datetime_string
+    steps:
+      - stepId: get_comments_by_ticket_id
+        description: Get comments data by ticket ID from Zendesk API.
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /attachments/${inputs.subResourceId}
+            method: get
+            response:
+              dataKey: attachment
+      - stepId: map_attachment
+        description: Map attachment data
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: $.steps.get_comments_by_ticket_id.output.data
+            externalSources:
+              ticketId: $.inputs.id
+      - stepId: typecast_attachment_data
+        description: Typecast attachment data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_attachment.output.data
+    result:
+      data: $.steps.typecast_attachment_data.output.data
+  - actionId: list_tickets_comments
+    categories:
+      - ticketing
+    actionType: list
+    entrypointUrl: /tickets/:id/comments
+    entrypointHttpMethod: get
+    schema: comments
+    label: List Ticket Comments
+    description: List Comments for a Ticket
+    details: "Returns a paginated list of list ticket comments. List comments for a ticket"
+    inputs:
+      - name: id
+        description: Ticket ID to fetch comments for
+        type: string
+        in: path
+        required: true
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: ticket_id
+        expression: $.external.ticketId
+        type: string
+      - targetFieldKey: content
+        expression: $.plain_body
+        type: object
+        properties:
+          - targetFieldKey: plain
+            type: string
+            expression: $.plain_body
+          - targetFieldKey: html
+            type: string
+            expression: $.html_body
+      - targetFieldKey: user_id
+        expression: $.author_id
+        type: string
+      - targetFieldKey: internal
+        expression: '{{$.public == false}}'
+        type: string
+      - targetFieldKey: created_at
+        expression: $.created_at
+        type: datetime_string
+    steps:
+      - stepId: get_comments_by_ticket_id
+        description: Get comments data by ticket ID from Zendesk API.
+        stepFunction:
+          functionName: request 
+          parameters:
+            url: /tickets/${inputs.id}/comments.json 
+            method: get 
+            response:
+              collection: true
+              indexField: id
+              dataKey: comments
+      - stepId: map_comments_data
+        description: Map comments data
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: $.steps.get_comments_by_ticket_id.output.data[*]
+            externalSources:
+              ticketId: $.inputs.id
+      - stepId: typecast_comments_data
+        description: Typecast comments data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_comments_data.output.data
+    result:
+      data: $.steps.typecast_comments_data.output.data
+  - actionId: get_tickets_comments
+    categories:
+      - ticketing
+    actionType: get
+    schema: comments
+    label: Get Ticket Comment
+    description: Get Comment by ID
+    details: "Returns detailed information for a specific get ticket comment. Get comment by id"
+    entrypointUrl: /tickets/:id/comments/:subResourceId
+    entrypointHttpMethod: get
+    inputs:
+      - name: id
+        description: Ticket ID to fetch the comment from
+        type: string
+        in: path
+        required: true
+      - name: subResourceId
+        description: Comment ID to fetch
+        type: string
+        in: path
+        required: true
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: ticket_id
+        expression: $.external.ticketId
+        type: string
+      - targetFieldKey: content
+        expression: $.plain_body
+        type: object
+        properties:
+          - targetFieldKey: plain
+            type: string
+            expression: $.plain_body
+          - targetFieldKey: html
+            type: string
+            expression: $.html_body
+      - targetFieldKey: user_id
+        expression: $.author_id
+        type: string
+      - targetFieldKey: internal
+        expression: '{{$.public == false}}'
+        type: string
+      - targetFieldKey: created_at
+        expression: $.created_at
+        type: datetime_string
+    steps:
+      - stepId: get_comments_by_ticket_id
+        description: Get comment data by ID from Zendesk API.
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tickets/${inputs.id}/comments.json
+            method: get
+            response:
+              collection: false
+              dataKey: comments
+      - stepId: map_comment_data
+        description: Map comment data
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: '{{steps.get_comments_by_ticket_id.output.data[.id == $.inputs.subResourceId][0]}}'
+            externalSources:
+              ticketId: $.inputs.id
+      - stepId: typecast_comment_data
+        description: Typecast comment data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_comment_data.output.data
+    result:
+      data: $.steps.typecast_comment_data.output.data
+  - actionId: list_tickets
+    categories:
+      - ticketing
+    actionType: list
+    entrypointUrl: /tickets
+    entrypointHttpMethod: get
+    schema: tickets
+    label: List Tickets
+    description: Get a list of tickets
+    details: "Returns a paginated list of tickets in Zendesk. Supports filtering by status, type, assignee, requester, organization, and pagination. Returns ticket data including ID, subject, description, status, priority, type, assignee, requester, created/updated timestamps, and other ticket properties."
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: type
+        expression: $.type
+        type: object
+        properties:
+          - targetFieldKey: id
+            type: string
+            expression: $.type
+          - targetFieldKey: name
+            type: string
+            expression: $.type
+      - targetFieldKey: ticket_number
+        expression: $.id
+        type: string
+      - targetFieldKey: title
+        expression: $.subject
+        type: string
+      - targetFieldKey: creator_id
+        expression: $.submitter_id
+        type: string
+      - targetFieldKey: reporters
+        expression: $.requester_id
+        type: string
+        array: true
+      - targetFieldKey: assignees
+        expression: $.assignee_id
+        type: string
+        array: true
+      - targetFieldKey: content
+        type: object
+        properties:
+          - targetFieldKey: plain
+            type: string
+            expression: $.description
+      - targetFieldKey: parent_id
+        expression: $.problem_id
+        type: string
+      - targetFieldKey: ticket_url
+        expression: $.url
+        type: string
+      - targetFieldKey: status
+        expression: $.status
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: "{{$.status == 'new'}}"
+              value: to-do
+            - matchExpression: "{{$.status == 'open'}}"
+              value: in-progress
+            - matchExpression: "{{$.status == 'pending'}}"
+              value: in-progress
+            - matchExpression: "{{$.status == 'hold'}}"
+              value: in-progress
+            - matchExpression: "{{$.status == 'solved'}}"
+              value: closed
+            - matchExpression: "{{$.status == 'closed'}}"
+              value: closed
+      - targetFieldKey: priority
+        expression: $.priority
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: "{{$.priority == 'urgent'}}"
+              value: highest
+            - matchExpression: "{{$.priority == 'high'}}"
+              value: high
+            - matchExpression: "{{$.priority == 'normal'}}"
+              value: medium
+            - matchExpression: "{{$.priority == 'low'}}"
+              value: low
+      - targetFieldKey: tags
+        expression: $.tags[*]
+        type: string
+        array: true
+      - targetFieldKey: created_at
+        expression: $.created_at
+        type: datetime_string
+      - targetFieldKey: updated_at
+        expression: $.updated_at
+        type: datetime_string
+    steps:
+      - stepId: get_tickets
+        description: Get tickets data
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tickets.json
+            method: get
+            args:
+              - name: page[size]
+                value: $.inputs.page_size
+                in: query
+                condition: '{{$.inputs.page_size > 0}}'
+              - name: page[after]
+                value: $.inputs.next
+                in: query
+                condition: '{{$.inputs.next}}'
+            response:
+              collection: true
+              indexField: id
+              dataKey: tickets
+      - stepId: map_tickets_data
+        description: Map tickets data
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: $.steps.get_tickets.output.data[*]
+      - stepId: typecast_tickets_data
+        description: Typecast tickets data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_tickets_data.output.data
+    result:
+      data: $.steps.typecast_tickets_data.output.data
+  - actionId: get_tickets
+    categories:
+      - ticketing
+    actionType: get
+    schema: tickets
+    label: Get Ticket
+    description: Get Ticket by ID
+    details: "Returns detailed information for a specific ticket by its ID. Includes ticket ID, subject, description, status, priority, type, assignee, requester, organization, comments, attachments, custom fields, created/updated timestamps, and all other ticket properties."
+    entrypointUrl: /tickets/:id
+    entrypointHttpMethod: get
+    inputs:
+      - name: id
+        description: Ticket id
+        type: string
+        in: path
+        required: true
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: type
+        expression: $.type
+        type: object
+        properties:
+          - targetFieldKey: id
+            type: string
+            expression: $.type
+          - targetFieldKey: name
+            type: string
+            expression: $.type
+      - targetFieldKey: ticket_number
+        expression: $.id
+        type: string
+      - targetFieldKey: title
+        expression: $.subject
+        type: string
+      - targetFieldKey: creator_id
+        expression: $.submitter_id
+        type: string
+      - targetFieldKey: reporters
+        expression: $.requester_id
+        type: string
+        array: true
+      - targetFieldKey: assignees
+        expression: $.assignee_id
+        type: string
+        array: true
+      - targetFieldKey: content
+        expression: $.description
+        type: object
+        properties:
+          - targetFieldKey: plain
+            type: string
+            expression: $.description
+      - targetFieldKey: parent_id
+        expression: $.problem_id
+        type: string
+      - targetFieldKey: ticket_url
+        expression: $.url
+        type: string
+      - targetFieldKey: status
+        expression: $.status
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: "{{$.status == 'new'}}"
+              value: to-do
+            - matchExpression: "{{$.status == 'open'}}"
+              value: in-progress
+            - matchExpression: "{{$.status == 'pending'}}"
+              value: in-progress
+            - matchExpression: "{{$.status == 'hold'}}"
+              value: in-progress
+            - matchExpression: "{{$.status == 'solved'}}"
+              value: closed
+            - matchExpression: "{{$.status == 'closed'}}"
+              value: closed
+      - targetFieldKey: priority
+        expression: $.priority
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: "{{$.priority == 'urgent'}}"
+              value: highest
+            - matchExpression: "{{$.priority == 'high'}}"
+              value: high
+            - matchExpression: "{{$.priority == 'normal'}}"
+              value: medium
+            - matchExpression: "{{$.priority == 'low'}}"
+              value: low
+      - targetFieldKey: tags
+        expression: $.tags[*]
+        type: string
+        array: true
+      - targetFieldKey: created_at
+        expression: $.created_at
+        type: datetime_string
+      - targetFieldKey: updated_at
+        expression: $.updated_at
+        type: datetime_string
+    steps:
+      - stepId: get_ticket
+        description: Get ticket data by ID
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tickets/${inputs.id}.json
+            method: get
+            response:
+              collection: false
+              dataKey: ticket
+      - stepId: map_ticket_data
+        description: Map ticket data
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: $.steps.get_ticket.output.data
+      - stepId: typecast_ticket_data
+        description: Typecast ticket data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_ticket_data.output.data
+    result:
+      data: $.steps.typecast_ticket_data.output.data
+  - actionId: create_ticket
+    categories:
+      - ticketing
+    actionType: create
+    schema: tickets
+    label: Create Ticket
+    description: Create a new support ticket with subject, description, priority, status, and assignment details
+    details: "Creates a new ticket in Zendesk with comprehensive options for subject, description (comment), priority, status, type, assignee, requester, group, tags, custom fields, and other ticket properties. Returns the created ticket with ID and all properties including timestamps."
+    entrypointUrl: /tickets
+    entrypointHttpMethod: post
+    resources: https://developer.zendesk.com/api-reference/ticketing/tickets/tickets/#create-ticket
+    inputs:
+      - name: ticket
+        description: Ticket object containing all ticket properties
+        type: object
+        in: body
+        required: true
+        properties:
+          - name: subject
+            description: The subject/title of the ticket
+            type: string
+            required: false
+          - name: comment
+            description: The ticket description and initial comment (required if no other content provided)
+            type: object
+            required: true
+            properties:
+              - name: body
+                description: The comment text content
+                type: string
+                required: true
+              - name: html_body
+                description: The comment HTML body (alternative to body)
+                type: string
+                required: false
+              - name: public
+                description: Whether the comment is public (true) or internal (false). Defaults to true
+                type: boolean
+                required: false
+          - name: requester_id
+            description: The numeric ID of the user requesting support
+            type: number
+            required: false
+          - name: assignee_id
+            description: The numeric ID of the agent to assign the ticket to
+            type: number
+            required: false
+          - name: group_id
+            description: The numeric ID of the group to assign the ticket to
+            type: number
+            required: false
+          - name: priority
+            description: The priority of the ticket (urgent, high, normal, low)
+            type: enum
+            required: false
+            oneOf:
+              values:
+                - urgent
+                - high
+                - normal
+                - low
+          - name: status
+            description: The status of the ticket (new, open, pending, hold, solved, closed)
+            type: enum
+            required: false
+            oneOf:
+              values:
+                - new
+                - open
+                - pending
+                - hold
+                - solved
+                - closed
+          - name: type
+            description: The type of the ticket (problem, incident, question, task)
+            type: enum
+            required: false
+            oneOf:
+              values:
+                - problem
+                - incident
+                - question
+                - task
+          - name: tags
+            description: Array of tags to apply to the ticket
+            type: string
+            array: true
+            required: false
+          - name: custom_fields
+            description: Array of custom field objects with id and value properties
+            type: object
+            array: true
+            required: false
+          - name: external_id
+            description: A unique external identifier for the ticket
+            type: string
+            required: false
+          - name: organization_id
+            description: The numeric ID of the organization associated with the ticket
+            type: number
+            required: false
+          - name: collaborator_ids
+            description: Array of user IDs to add as collaborators (CC)
+            type: number
+            array: true
+            required: false
+          - name: due_at
+            description: The due date for the ticket (ISO 8601 datetime)
+            type: string
+            required: false
+          - name: problem_id
+            description: The ID of the problem ticket this ticket is linked to
+            type: number
+            required: false
+          - name: brand_id
+            description: The numeric ID of the brand the ticket is associated with
+            type: number
+            required: false
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: type
+        expression: $.type
+        type: object
+        properties:
+          - targetFieldKey: id
+            type: string
+            expression: $.type
+          - targetFieldKey: name
+            type: string
+            expression: $.type
+      - targetFieldKey: ticket_number
+        expression: $.id
+        type: string
+      - targetFieldKey: title
+        expression: $.subject
+        type: string
+      - targetFieldKey: creator_id
+        expression: $.submitter_id
+        type: string
+      - targetFieldKey: reporters
+        expression: $.requester_id
+        type: string
+        array: true
+      - targetFieldKey: assignees
+        expression: $.assignee_id
+        type: string
+        array: true
+      - targetFieldKey: content
+        expression: $.description
+        type: object
+        properties:
+          - targetFieldKey: plain
+            type: string
+            expression: $.description
+      - targetFieldKey: parent_id
+        expression: $.problem_id
+        type: string
+      - targetFieldKey: ticket_url
+        expression: $.url
+        type: string
+      - targetFieldKey: status
+        expression: $.status
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: "{{$.status == 'new'}}"
+              value: to-do
+            - matchExpression: "{{$.status == 'open'}}"
+              value: in-progress
+            - matchExpression: "{{$.status == 'pending'}}"
+              value: in-progress
+            - matchExpression: "{{$.status == 'hold'}}"
+              value: in-progress
+            - matchExpression: "{{$.status == 'solved'}}"
+              value: closed
+            - matchExpression: "{{$.status == 'closed'}}"
+              value: closed
+      - targetFieldKey: priority
+        expression: $.priority
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: "{{$.priority == 'urgent'}}"
+              value: highest
+            - matchExpression: "{{$.priority == 'high'}}"
+              value: high
+            - matchExpression: "{{$.priority == 'normal'}}"
+              value: medium
+            - matchExpression: "{{$.priority == 'low'}}"
+              value: low
+      - targetFieldKey: tags
+        expression: $.tags[*]
+        type: string
+        array: true
+      - targetFieldKey: created_at
+        expression: $.created_at
+        type: datetime_string
+      - targetFieldKey: updated_at
+        expression: $.updated_at
+        type: datetime_string
+    steps:
+      - stepId: create_ticket
+        description: Create a new ticket in Zendesk with all specified properties
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /tickets.json
+            method: post
+            args:
+              - name: ticket
+                value: $.inputs.ticket
+                in: body
+            response:
+              collection: false
+              dataKey: ticket
+      - stepId: map_ticket_data
+        description: Map created ticket data to unified schema
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: $.steps.create_ticket.output.data
+      - stepId: typecast_ticket_data
+        description: Typecast created ticket data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_ticket_data.output.data
+    result:
+      data: $.steps.typecast_ticket_data.output.data
+  - actionId: list_ticket_types
+    categories:
+      - ticketing
+    actionType: list
+    schema: ticket_types
+    label: List Ticket Types
+    description: List all ticket types available in Zendesk
+    details: "Returns a list of all ticket types available in Zendesk. Returns ticket type data including ID and name (question, incident, problem, task)."
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: name
+        expression: $.name
+        type: string
+    steps:
+      - stepId: define_ticket_types
+        description: Define static ticket types
+        stepFunction:
+          functionName: static_values
+          parameters:
+            values: [
+                { id: "question", name: "Question" },
+                { id: "incident", name: "Incident" },
+                { id: "problem", name: "Problem" },
+                { id: "task", name: "Task" }
+              ]
+      - stepId: map_ticket_types
+        description: Map ticket types
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: $.steps.define_ticket_types.output.data[*]
+      - stepId: typecast_ticket_types
+        description: Typecast ticket types
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_ticket_types.output.data
+    result:
+      data: $.steps.typecast_ticket_types.output.data
+  - actionId: get_ticket_types # For invalid or non-existent ticket type IDs, the response is an empty object with 200 status instead of an error 404 or a not-found message.Reference: https://stackonehq.atlassian.net/browse/ENG-10968
+    categories:
+      - ticketing
+    actionType: get
+    entrypointUrl: /ticket_types/:id
+    entrypointHttpMethod: get
+    schema: ticket_types
+    label: Get Ticket Type
+    description: Get details of a specific ticket type
+    details: "Returns detailed information for a specific ticket type by its ID. Includes ticket type ID and name. Note: For invalid or non-existent ticket type IDs, the response is an empty object with 200 status instead of an error 404."
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: name
+        expression: $.name
+        type: string
+    inputs:
+      - name: id
+        description: Ticket Type id
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: define_ticket_types
+        description: Define static ticket types
+        stepFunction:
+          functionName: static_values
+          parameters:
+            values: [
+              { id: "question", name: "Question" },
+              { id: "incident", name: "Incident" },
+              { id: "problem", name: "Problem" },
+              { id: "task", name: "Task" }
+            ]
+      - stepId: map_ticket_type_data
+        description: Map ticket type data
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: '{{steps.define_ticket_types.output.data[.id == inputs.id][0]}}'
+        condition: '{{steps.define_ticket_types.output.data[.id == inputs.id][0]}}'
+      - stepId: typecast_ticket_type_data
+        description: Typecast ticket type data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_ticket_type_data.output.data
+        condition: '{{steps.define_ticket_types.output.data[.id == inputs.id][0]}}'
+    result:
+      data: $.steps.typecast_ticket_type_data.output.data
+  - actionId: list_triggers
+    categories:
+      - ticketing
+    actionType: list
+    label: List Triggers
+    description: Retrieve all ticket triggers with optional filtering by active status or category
+    details: "Returns a paginated list of all triggers in Zendesk. Supports filtering by active status, category_id, and sorting by alphabetical, created_at, updated_at, or position with sort_order (asc or desc). Returns trigger data including ID, title, active status, category_id, conditions, actions, position, created/updated timestamps, and other trigger properties."
+    entrypointUrl: /triggers
+    entrypointHttpMethod: get
+    inputs:
+      - name: active
+        description: Filter by active triggers (true) or inactive triggers (false)
+        type: boolean
+        in: query
+        required: false
+      - name: category_id
+        description: Filter triggers by category ID
+        type: string
+        in: query
+        required: false
+      - name: sort_by
+        description: Sort field (alphabetical, created_at, updated_at, position)
+        type: string
+        in: query
+        required: false
+      - name: sort_order
+        description: Sort order (asc or desc)
+        type: string
+        in: query
+        required: false
+    steps:
+      - stepId: get_triggers
+        description: Fetch triggers from Zendesk API with pagination and filtering
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /triggers.json
+            method: get
+            args:
+              - name: page[size]
+                value: $.inputs.page_size
+                in: query
+                condition: '{{$.inputs.page_size > 0}}'
+              - name: page[after]
+                value: $.inputs.next
+                in: query
+                condition: '{{$.inputs.next}}'
+              - name: active
+                value: $.inputs.active
+                in: query
+                condition: '{{$.inputs.active != null}}'
+              - name: category_id
+                value: $.inputs.category_id
+                in: query
+                condition: '{{$.inputs.category_id}}'
+              - name: sort_by
+                value: $.inputs.sort_by
+                in: query
+                condition: '{{$.inputs.sort_by}}'
+              - name: sort_order
+                value: $.inputs.sort_order
+                in: query
+                condition: '{{$.inputs.sort_order}}'
+            response:
+              collection: true
+              dataKey: triggers
+    result:
+      data: $.steps.get_triggers.output.data
+  - actionId: get_trigger
+    categories:
+      - ticketing
+    actionType: get
+    label: Get Trigger
+    description: Retrieve detailed information about a specific trigger including its conditions and actions
+    details: "Returns detailed information for a specific trigger by its ID. Includes trigger ID, title, active status, category_id, conditions, actions, position, created/updated timestamps, and all other trigger properties."
+    entrypointUrl: /triggers/:id
+    entrypointHttpMethod: get
+    inputs:
+      - name: id
+        description: The unique identifier of the trigger
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: get_trigger_by_id
+        description: Fetch trigger details from Zendesk API
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /triggers/${inputs.id}.json
+            method: get
+            response:
+              dataKey: trigger
+    result:
+      data: $.steps.get_trigger_by_id.output.data
+  - actionId: search_triggers
+    categories:
+      - ticketing
+    actionType: list
+    label: Search Triggers
+    description: Search for triggers by title query string with optional filtering and sorting
+    details: "Searches for triggers in Zendesk using a query string. Supports filtering by active status and category_id. Returns matching trigger data including ID, title, active status, and other trigger properties."
+    entrypointUrl: /triggers/search
+    entrypointHttpMethod: get
+    inputs:
+      - name: query
+        description: Search query to find triggers with matching title
+        type: string
+        in: query
+        required: false
+      - name: filter
+        description: Filter by attributes
+        type: string
+        in: query
+        required: false
+      - name: active
+        description: Filter by active triggers (true) or inactive triggers (false)
+        type: boolean
+        in: query
+        required: false
+      - name: sort_by
+        description: Sort field (alphabetical, created_at, updated_at, position)
+        type: string
+        in: query
+        required: false
+      - name: sort_order
+        description: Sort order (asc or desc)
+        type: string
+        in: query
+        required: false
+    steps:
+      - stepId: search_triggers
+        description: Search for triggers matching the query
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /triggers/search.json
+            method: get
+            args:
+              - name: query
+                value: $.inputs.query
+                in: query
+                condition: '{{present($.inputs.query)}}'
+              - name: filter
+                value: $.inputs.filter
+                in: query
+                condition: '{{present($.inputs.filter)}}'
+              - name: active
+                value: $.inputs.active
+                in: query
+                condition: '{{present($.inputs.active)}}'
+              - name: sort_by
+                value: $.inputs.sort_by
+                in: query
+                condition: '{{present($.inputs.sort_by)}}'
+              - name: sort_order
+                value: $.inputs.sort_order
+                in: query
+                condition: '{{present($.inputs.sort_order)}}'
+            response:
+              collection: true
+              dataKey: triggers
+    result:
+      data: $.steps.search_triggers.output.data
+  - actionId: create_trigger
+    categories:
+      - ticketing
+    actionType: create
+    label: Create Trigger
+    description: Create a new trigger with specified conditions and actions for automatic ticket workflows
+    details: "Creates a new trigger in Zendesk. Requires title, conditions (array of condition objects), and actions (array of action objects). Supports optional active status, category_id, and position. Returns the created trigger with ID and all properties."
+    entrypointUrl: /triggers
+    entrypointHttpMethod: post
+    inputs:
+      - name: trigger
+        description: Trigger object containing all trigger properties
+        type: object
+        in: body
+        required: true
+        properties:
+          - name: title
+            description: The title of the trigger
+            type: string
+            required: true
+          - name: conditions
+            description: Object describing when the trigger executes (all and any conditions)
+            type: object
+            required: true
+          - name: actions
+            description: Array of actions to perform when conditions are met
+            type: object
+            array: true
+            required: true
+          - name: category_id
+            description: The ID of the category the trigger belongs to
+            type: string
+            required: false
+          - name: description
+            description: Description of the trigger's purpose
+            type: string
+            required: false
+          - name: active
+            description: Whether the trigger is active
+            type: boolean
+            required: false
+    steps:
+      - stepId: create_trigger
+        description: Create a new trigger in Zendesk with specified workflow rules
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /triggers.json
+            method: post
+            args:
+              - name: trigger
+                value: $.inputs.trigger
+                in: body
+            response:
+              dataKey: trigger
+    result:
+      data: $.steps.create_trigger.output.data
+  - actionId: update_trigger
+    categories:
+      - ticketing
+    actionType: update
+    label: Update Trigger
+    description: Update an existing trigger's conditions, actions, or settings (replaces all conditions and actions)
+    details: "Updates an existing trigger. Requires trigger ID. Supports updating title, conditions, actions, active status, category_id, and position. Returns the updated trigger with all properties."
+    entrypointUrl: /triggers/:id
+    entrypointHttpMethod: put
+    inputs:
+      - name: id
+        description: The unique identifier of the trigger to update
+        type: string
+        in: path
+        required: true
+      - name: trigger
+        description: Trigger object containing properties to update
+        type: object
+        in: body
+        required: true
+        properties:
+          - name: title
+            description: The title of the trigger
+            type: string
+            required: false
+          - name: conditions
+            description: Object describing when the trigger executes (replaces all existing conditions)
+            type: object
+            required: false
+          - name: actions
+            description: Array of actions to perform (replaces all existing actions)
+            type: object
+            array: true
+            required: false
+          - name: category_id
+            description: The ID of the category the trigger belongs to
+            type: string
+            required: false
+          - name: description
+            description: Description of the trigger's purpose
+            type: string
+            required: false
+          - name: active
+            description: Whether the trigger is active
+            type: boolean
+            required: false
+    steps:
+      - stepId: update_trigger
+        description: Update trigger details in Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /triggers/${inputs.id}.json
+            method: put
+            args:
+              - name: trigger
+                value: $.inputs.trigger
+                in: body
+            response:
+              dataKey: trigger
+    result:
+      data: $.steps.update_trigger.output.data
+  - actionId: delete_trigger
+    categories:
+      - ticketing
+    actionType: delete
+    label: Delete Trigger
+    description: Permanently delete a trigger from Zendesk
+    details: "Deletes a delete trigger. Permanently delete a trigger from zendesk"
+    entrypointUrl: /triggers/:id
+    entrypointHttpMethod: delete
+    inputs:
+      - name: id
+        description: The unique identifier of the trigger to delete
+        type: string
+        in: path
+        required: true
+    steps:
+      - stepId: delete_trigger
+        description: Remove trigger from Zendesk
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /triggers/${inputs.id}.json
+            method: delete
+    result:
+      data: $.steps.delete_trigger.output.data
+  - actionId: list_users
+    categories:
+      - ticketing
+    actionType: list
+    schema: users
+    label: List Users
+    description: List all users in Zendesk
+    details: "Returns a paginated list of all users in Zendesk. Supports filtering by role, organization, and pagination. Returns user data including ID, name, email, phone, role (agent, admin, end-user), active status, created/updated timestamps, and other user properties."
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: type
+        expression: $.role
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: "{{$.role == 'agent'}}"
+              value: agent
+            - matchExpression: "{{$.role == 'end-user'}}"
+              value: contact
+            - matchExpression: "{{$.role == 'admin'}}"
+              value: agent
+      - targetFieldKey: name
+        expression: $.name
+        type: string
+      # - targetFieldKey: first_name
+      #   expression: '{{$.name.split(" ")[0]}}' # will be used in future once this kind of feature is implemented.
+      #   type: string
+      # - targetFieldKey: last_name
+      #   expression: '{{$.name.split(" ")[1]}}'
+      #   type: string
+      - targetFieldKey: primary_email
+        expression: $.email
+        type: string
+      - targetFieldKey: primary_phone
+        expression: $.phone
+        type: string
+      - targetFieldKey: username
+        expression: $.name
+        type: string
+      - targetFieldKey: active
+        expression: $.active
+        type: boolean
+      - targetFieldKey: customer_account_reference
+        expression: $.external_id
+        type: string
+      - targetFieldKey: created_at
+        expression: $.created_at
+        type: datetime_string
+      - targetFieldKey: updated_at
+        expression: $.updated_at
+        type: datetime_string
+    steps:
+      - stepId: get_users
+        description: Get users data
+        stepFunction:
+          functionName: request
+          parameters:
+            url: /users.json
+            method: get
+            args:
+              - name: page[size]
+                value: $.inputs.page_size
+                in: query
+                condition: '{{$.inputs.page_size > 0}}'
+              - name: page[after]
+                value: $.inputs.next
+                in: query
+                condition: '{{$.inputs.next}}'
+            response:
+              collection: true
+              indexField: id
+              dataKey: users
+      - stepId: map_users_data
+        description: Map users data
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: $.steps.get_users.output.data[*]
+      - stepId: typecast_users_data
+        description: Typecast users data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_users_data.output.data[*]
+    result:
+      data: $.steps.typecast_users_data.output.data
+  - actionId: get_users
+    categories:
+      - ticketing
+    actionType: get
+    schema: users
+    label: Get User
+    description: Get User by ID
+    details: "Returns detailed information for a specific user by their ID. Includes user ID, name, email, phone, role, active status, organization, tags, created/updated timestamps, and all other user properties."
+    entrypointUrl: /users/:id
+    entrypointHttpMethod: get
+    inputs:
+      - name: id
+        description: User id
+        type: string
+        in: path
+        required: true
+    fieldConfigs:
+      - targetFieldKey: id
+        expression: $.id
+        type: string
+      - targetFieldKey: type
+        expression: $.role
+        type: enum
+        enumMapper:
+          matcher:
+            - matchExpression: "{{$.role == 'agent'}}"
+              value: agent
+            - matchExpression: "{{$.role == 'end-user'}}"
+              value: contact
+            - matchExpression: "{{$.role == 'admin'}}"
+              value: agent
+      - targetFieldKey: name
+        expression: $.name
+        type: string
+      - targetFieldKey: first_name
+        expression: '{{$.name.split(" ")[0]}}' # this expression is not working in the current version of StackOne, but it is expected to work in future versions.
+        type: string
+      - targetFieldKey: last_name
+        expression: '{{$.name.split(" ")[1]}}'
+        type: string
+      - targetFieldKey: primary_email
+        expression: $.email
+        type: string
+      - targetFieldKey: primary_phone
+        expression: $.phone
+        type: string
+      - targetFieldKey: username
+        expression: $.name
+        type: string
+      - targetFieldKey: active
+        expression: $.active
+        type: boolean
+      - targetFieldKey: customer_account_reference
+        expression: $.external_id
+        type: string
+      - targetFieldKey: created_at
+        expression: $.created_at
+        type: datetime_string
+      - targetFieldKey: updated_at
+        expression: $.updated_at
+        type: datetime_string
+    steps:
+      - stepId: get_user_by_id
+        description: Get user data by ID from Zendesk API.
+        stepFunction:
+          functionName: request 
+          parameters:
+            url: /users/${inputs.id}.json
+            method: get
+            response:
+              dataKey: user
+      - stepId: map_user_data
+        description: Map user data
+        stepFunction:
+          functionName: map_fields
+          version: '2'
+          parameters:
+            dataSource: $.steps.get_user_by_id.output.data
+      - stepId: typecast_user_data
+        description: Typecast user data
+        stepFunction:
+          functionName: typecast
+          version: '2'
+          parameters:
+            dataSource: $.steps.map_user_data.output.data
+    result:
+      data: $.steps.typecast_user_data.output.data
+  - actionId: get_current_users
+    label: Get Current User
+    categories:
+      - ticketing
+    actionType: get
+    description: Test Zendesk OAuth2 connection by fetching current user
+    details: "Returns detailed information for the currently authenticated user. Includes user ID, name, email, phone, role, active status, organization, tags, created/updated timestamps, and all other user properties."
+    steps:
+      - stepId: get_current_user
+        description: Get current user to verify OAuth2 connection
+        stepFunction:
+          functionName: request
+          parameters:
+            url: '/users/me.json'
+            method: get
+            args:
+              - name: Content-Type
+                value: application/json
+                in: headers
+    result:
+      data: $.steps.get_current_user.output.data
