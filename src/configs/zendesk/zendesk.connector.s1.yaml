@@ -59,7 +59,7 @@ authentication:
         tokenUrl: 'https://${credentials.subdomain}.zendesk.com/oauth/tokens'
         token: $.credentials.accessToken
         includeBearer: true
-      setupFields:
+      configFields:
         - key: subdomain
           label: Subdomain
           type: text
@@ -67,6 +67,7 @@ authentication:
           secret: false
           placeholder: stackone
           description: The Zendesk subdomain for your account (e.g., for `https://stackone.zendesk.com`, use `stackone`).
+      setupFields:
         - key: clientId
           label: Client ID
           type: text
